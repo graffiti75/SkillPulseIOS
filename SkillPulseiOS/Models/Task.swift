@@ -2,7 +2,6 @@
 //  Task.swift
 //  SkillPulse
 //
-//  Created by iOS Conversion
 //  A task model for the SkillPulse app
 //
 

@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-//import FirebaseCore
+import FirebaseCore
 
 @main
 struct SkillPulseApp: App {
@@ -31,7 +31,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
     ) -> Bool {
         // Configure Firebase
-//        FirebaseApp.configure()
+        FirebaseApp.configure()
         print("✅ Firebase configured successfully")
         return true
     }
