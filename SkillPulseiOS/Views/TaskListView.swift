@@ -11,6 +11,9 @@ struct TaskListView: View {
     @EnvironmentObject var authService: AuthenticationService
     @StateObject private var firestoreService = FirestoreService.shared
     
+    // Preview support
+    var previewTasks: [SkillTask]? = nil
+    
     @State private var tasks: [SkillTask] = []
     @State private var allTasks: [SkillTask] = [] // Store all tasks for filtering
     @State private var isLoading: Bool = false
@@ -25,6 +28,14 @@ struct TaskListView: View {
     @State private var selectedFilterDate: Date? = nil
     @State private var isFilterActive: Bool = false
     
+    // Phase 4.2 - Pagination
+    @State private var canLoadMore: Bool = false
+    @State private var isLoadingMore: Bool = false
+    @State private var lastTaskId: String? = nil
+    
+    // Phase 4.4 - Task Counter / Page Indicator
+    @State private var currentVisibleIndex: Int = 0
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -36,7 +47,8 @@ struct TaskListView: View {
                     
                     // Task list or empty state
                     if tasks.isEmpty && !isLoading {
-                        emptyStateView.frame(maxWidth: .infinity, maxHeight: .infinity)
+                        emptyStateView
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         taskListContent
                     }
@@ -51,6 +63,15 @@ struct TaskListView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     userInfoButton
+                }
+                
+                // Phase 4.4 - Task Counter (separate item)
+                ToolbarItem(placement: .principal) {
+                    if !tasks.isEmpty {
+                        Text("\(currentVisibleIndex + 1) of \(tasks.count)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -88,7 +109,11 @@ struct TaskListView: View {
                 Text("Are you sure you want to delete '\(task.description)'?")
             }
             .onAppear {
-                loadTasks()
+                if let preview = previewTasks {
+                    tasks = preview  // Use preview data
+                } else {
+                    loadTasks()      // Normal behavior
+                }
             }
         }
     }
@@ -168,7 +193,7 @@ struct TaskListView: View {
                     Circle()
                         .fill(Color.red)
                         .frame(width: 8, height: 8)
-                        .offset(x: 4, y: 0)
+                        .offset(x: 4, y: -4)
                 }
             }
         }
@@ -193,7 +218,7 @@ struct TaskListView: View {
     
     private var taskListContent: some View {
         List {
-            ForEach(tasks) { task in
+            ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
                 TaskRowView(task: task)
                     .contentShape(Rectangle())
                     .onTapGesture {
@@ -207,11 +232,30 @@ struct TaskListView: View {
                             Label("Delete", systemImage: "trash")
                         }
                     }
+                    .onAppear {
+                        // Phase 4.4 - Update visible index for task counter
+                        currentVisibleIndex = index
+                        
+                        // Phase 4.2 - Auto-load when scrolling near bottom
+                        if index == tasks.count - 3 && canLoadMore && !isLoadingMore {
+                            loadMoreTasks()
+                        }
+                    }
+            }
+            
+            // Phase 4.2 - Loading indicator at bottom
+            if isLoadingMore {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .padding()
+                    Spacer()
+                }
             }
         }
         .listStyle(.plain)
         .refreshable {
-            loadTasks()
+            await refreshTasks()
         }
     }
     
@@ -292,15 +336,19 @@ struct TaskListView: View {
         }
         
         isLoading = true
+        lastTaskId = nil // Reset pagination
         
         Task {
             do {
                 let loadedTasks = try await firestoreService.loadTasks(
-                    for: authService.currentUserEmail
+                    for: authService.currentUserEmail,
+                    after: nil // Start from beginning
                 )
                 
                 await MainActor.run {
                     self.allTasks = loadedTasks
+                    self.lastTaskId = loadedTasks.last?.id
+                    self.canLoadMore = loadedTasks.count == 50 // itemsLimit
                     
                     // Apply filter if active, otherwise show all
                     if isFilterActive {
@@ -316,6 +364,80 @@ struct TaskListView: View {
                     self.isLoading = false
                     self.alertItem = AlertItem.error(error.localizedDescription)
                 }
+            }
+        }
+    }
+    
+    // Phase 4.2 - Load More Tasks
+    private func loadMoreTasks() {
+        guard !isLoadingMore, canLoadMore, let lastId = lastTaskId else {
+            return
+        }
+        
+        isLoadingMore = true
+        
+        Task {
+            do {
+                let moreTasks = try await firestoreService.loadTasks(
+                    for: authService.currentUserEmail,
+                    after: lastId
+                )
+                
+                await MainActor.run {
+                    self.allTasks.append(contentsOf: moreTasks)
+                    self.lastTaskId = moreTasks.last?.id
+                    self.canLoadMore = moreTasks.count == 50 // itemsLimit
+                    
+                    // Apply filter if active, otherwise show all
+                    if isFilterActive {
+                        applyFilter()
+                    } else {
+                        self.tasks.append(contentsOf: moreTasks)
+                    }
+                    
+                    self.isLoadingMore = false
+                }
+                
+                print("📄 Loaded \(moreTasks.count) more tasks")
+            } catch {
+                await MainActor.run {
+                    self.isLoadingMore = false
+                    self.alertItem = AlertItem.error(error.localizedDescription)
+                }
+            }
+        }
+    }
+    
+    // Phase 4.2 - Refresh (pull-to-refresh)
+    private func refreshTasks() async {
+        await MainActor.run {
+            isLoading = true
+            lastTaskId = nil
+        }
+        
+        do {
+            let loadedTasks = try await firestoreService.loadTasks(
+                for: authService.currentUserEmail,
+                after: nil
+            )
+            
+            await MainActor.run {
+                self.allTasks = loadedTasks
+                self.lastTaskId = loadedTasks.last?.id
+                self.canLoadMore = loadedTasks.count == 50
+                
+                if isFilterActive {
+                    applyFilter()
+                } else {
+                    self.tasks = loadedTasks
+                }
+                
+                self.isLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                self.isLoading = false
+                self.alertItem = AlertItem.error(error.localizedDescription)
             }
         }
     }
@@ -350,7 +472,32 @@ struct TaskListView: View {
 }
 
 // MARK: - Preview
-#Preview {
+#Preview("With Tasks") {
+    // 1. Define the 3 base tasks
+    let baseTasks = [
+        SkillTask(id: "20260209001", userId: "test@test.com", description: "Morning workout", timestamp: "2026-02-09T08:00:00-03:00", startTime: "2026-02-09T08:00:00-03:00", endTime: "2026-02-09T09:00:00-03:00"),
+        SkillTask(id: "20260209002", userId: "test@test.com", description: "Team meeting", timestamp: "2026-02-09T10:00:00-03:00", startTime: "2026-02-09T10:00:00-03:00", endTime: "2026-02-09T11:30:00-03:00"),
+        SkillTask(id: "20260209003", userId: "test@test.com", description: "Code review", timestamp: "2026-02-09T13:00:00-03:00", startTime: "2026-02-09T13:00:00-03:00", endTime: "2026-02-09T15:00:00-03:00")
+    ]
+    
+    // 2. Repeat the sequence 20 times (giving us 60 items).
+    // Use flatMap to flatten the array of arrays into a single array.
+    let repeatedTasks = (0..<20).flatMap { index in
+        baseTasks.map { task in
+            // IMPORTANT: If SkillTask is a Struct, we create a copy and update the ID
+            // to ensure SwiftUI doesn't complain about duplicate IDs.
+            var newTask = task
+            newTask.id = "\(task.id)-\(index)"
+            return newTask
+        }
+    }
+    
+    // 3. Return the view
+    return TaskListView(previewTasks: repeatedTasks)
+        .environmentObject(AuthenticationService.shared)
+}
+
+#Preview("Empty State") {
     TaskListView()
         .environmentObject(AuthenticationService.shared)
 }

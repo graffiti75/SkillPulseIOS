@@ -20,7 +20,7 @@ class FirestoreService: ObservableObject {
     
     private let db = Firestore.firestore()
     private let tasksCollection = "tasks"
-    private let itemsLimit = 50
+    private let itemsLimit = 50 // Match Android's ITEMS_LIMIT
     
     /// Published array of tasks
     @Published var tasks: [SkillTask] = []
@@ -39,19 +39,27 @@ class FirestoreService: ObservableObject {
     
     // MARK: - Load Tasks
     
-    /// Load tasks for the current user
-    /// - Parameter userEmail: Current user's email
-    /// - Returns: Array of tasks or error
-    func loadTasks(for userEmail: String) async throws -> [SkillTask] {
+    /// Load tasks for the current user with pagination support
+    /// - Parameters:
+    ///   - userEmail: Current user's email
+    ///   - lastTaskId: Optional task ID to start after (for pagination)
+    /// - Returns: Array of tasks
+    func loadTasks(for userEmail: String, after lastTaskId: String? = nil) async throws -> [SkillTask] {
         isLoading = true
         errorMessage = nil
         
         do {
-            let snapshot = try await db.collection(tasksCollection)
+            var query = db.collection(tasksCollection)
                 .whereField("userId", isEqualTo: userEmail)
                 .order(by: "id", descending: true)
                 .limit(to: itemsLimit)
-                .getDocuments()
+            
+            // Pagination: start after the last task ID if provided
+            if let lastTaskId = lastTaskId {                
+                query = query.start(after: [lastTaskId])
+            }
+            
+            let snapshot = try await query.getDocuments()
             
             var loadedTasks: [SkillTask] = []
             
@@ -63,11 +71,10 @@ class FirestoreService: ObservableObject {
             
             // Update published property on main thread
             await MainActor.run {
-                self.tasks = loadedTasks
                 self.isLoading = false
             }
             
-            print("✅ Loaded \(loadedTasks.count) tasks for \(userEmail)")
+            print("✅ Loaded \(loadedTasks.count) tasks for \(userEmail)" + (lastTaskId != nil ? " (pagination)" : ""))
             return loadedTasks
             
         } catch {
@@ -88,8 +95,7 @@ class FirestoreService: ObservableObject {
     ///   - startTime: Start time in HH:mm format
     ///   - endTime: End time in HH:mm format
     ///   - userEmail: Current user's email
-    /// - Throws: `FirestoreError.invalidData` if description is empty
-    /// - Throws: `FirestoreError.addFailed` if Firestore operation fails
+    /// - Returns: Success or error
     func addTask(
         description: String,
         startTime: String,
@@ -149,9 +155,7 @@ class FirestoreService: ObservableObject {
     ///   - description: New description
     ///   - startTime: New start time
     ///   - endTime: New end time
-    /// - Throws: `FirestoreError.invalidData` if description is empty
-    /// - Throws: `FirestoreError.taskNotFound` if task doesn't exist
-    /// - Throws: `FirestoreError.updateFailed` if Firestore operation fails
+    /// - Returns: Success or error
     func updateTask(
         taskId: String,
         description: String,
@@ -206,8 +210,7 @@ class FirestoreService: ObservableObject {
     
     /// Delete a task from Firestore
     /// - Parameter taskId: Task ID to delete
-    /// - Throws: `FirestoreError.taskNotFound` if task doesn't exist
-    /// - Throws: `FirestoreError.deleteFailed` if Firestore operation fails
+    /// - Returns: Success or error
     func deleteTask(taskId: String) async throws {
         isLoading = true
         errorMessage = nil
