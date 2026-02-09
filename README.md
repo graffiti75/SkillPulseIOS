@@ -12,7 +12,7 @@ This is the iOS companion to the [SkillPulse Android app](https://github.com/gra
 
 Check out the app in action:
 
-![SkillPulse iOS Demo](https://raw.githubusercontent.com/graffiti75/SkillPulseIOS/refs/heads/master/SkillPulseiOS/media/Simulator%20Screen%20Recording%20-%20iPhone%2017%20Pro%20-%202026-02-09%20at%2015.21.19.gif)
+[![SkillPulse iOS Demo](https://raw.githubusercontent.com/graffiti75/SkillPulseIOS/refs/heads/master/SkillPulseiOS/media/Simulator%20Screen%20Recording%20-%20iPhone%2017%20Pro%20-%202026-02-09%20at%2015.21.19.gif)](https://www.youtube.com/shorts/6UDXk_9fOlc)
 
 Also, you can check out the full video [here](https://www.youtube.com/shorts/6UDXk_9fOlc).
 
