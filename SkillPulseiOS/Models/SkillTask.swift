@@ -9,7 +9,7 @@ import Foundation
 import FirebaseFirestore
 
 /// Represents a task in the SkillPulse app
-struct Task: Identifiable, Codable, Equatable {
+struct SkillTask: Identifiable, Codable, Equatable {
     /// Unique identifier for the task
     var id: String
     
@@ -70,16 +70,20 @@ struct Task: Identifiable, Codable, Equatable {
 }
 
 // MARK: - Computed Properties
-extension Task {
+extension SkillTask {
     /// Check if task has valid time range
     var hasTimeRange: Bool {
         !startTime.isEmpty && !endTime.isEmpty
     }
     
-    /// Get formatted time range string
-    var timeRangeText: String {
-        if hasTimeRange {
-            return "\(startTime) - \(endTime)"
+    /// Get formatted date string
+    var dateText: String {
+        if !startTime.isEmpty,
+           let date = Date.fromISO8601String(startTime) {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .none
+            return formatter.string(from: date)
         }
         return ""
     }
@@ -91,10 +95,10 @@ extension Task {
 }
 
 // MARK: - Sample Data (for previews and testing)
-extension Task {
+extension SkillTask {
     /// Create sample tasks for SwiftUI previews
-    static let sampleTasks: [Task] = [
-        Task(
+    static let sampleTasks: [SkillTask] = [
+        SkillTask(
             id: UUID().uuidString,
             userId: "user123",
             description: "Complete iOS app conversion",
@@ -102,7 +106,7 @@ extension Task {
             startTime: "09:00",
             endTime: "12:00"
         ),
-        Task(
+        SkillTask(
             id: UUID().uuidString,
             userId: "user123",
             description: "Review Firebase integration",
@@ -110,7 +114,7 @@ extension Task {
             startTime: "14:00",
             endTime: "15:30"
         ),
-        Task(
+        SkillTask(
             id: UUID().uuidString,
             userId: "user123",
             description: "Write unit tests",
@@ -121,8 +125,8 @@ extension Task {
     ]
     
     /// Single sample task
-    static var sample: Task {
-        Task(
+    static var sample: SkillTask {
+        SkillTask(
             id: UUID().uuidString,
             userId: "user123",
             description: "Sample task",

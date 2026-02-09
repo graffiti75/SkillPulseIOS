@@ -50,6 +50,22 @@ extension Date {
     static func fromTimestampString(_ timestamp: String) -> Date? {
         DateFormatter.timestampFormatter.date(from: timestamp)
     }
+    
+    /// Convert Date to ISO 8601 datetime string (with timezone)
+    /// Format: 2026-02-08T14:30:00-03:00
+    func toISO8601String() -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        formatter.timeZone = TimeZone.current
+        return formatter.string(from: self)
+    }
+    
+    /// Create Date from ISO 8601 datetime string
+    static func fromISO8601String(_ dateString: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: dateString)
+    }
 }
 
 extension String {
