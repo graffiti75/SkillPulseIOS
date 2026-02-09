@@ -2,7 +2,7 @@
 //  AddTaskView.swift
 //  SkillPulse
 //
-//  Phase 3 - Add Task View
+//  Phase 4.3 - Added Task Suggestions Feature
 //
 
 import SwiftUI
@@ -12,6 +12,7 @@ struct AddTaskView: View {
     @EnvironmentObject var authService: AuthenticationService
     
     var onTaskAdded: () -> Void
+    var suggestions: [String] = [] // Phase 4.3 - Task suggestions from previous tasks
     
     @State private var description: String = ""
     @State private var startTime: Date = Date()
@@ -19,27 +20,43 @@ struct AddTaskView: View {
     @State private var isLoading: Bool = false
     @State private var alertItem: AlertItem?
     
+    // Phase 4.3 - Suggestions
+    @State private var showSuggestions: Bool = false
+    @State private var filteredSuggestions: [String] = []
+    
     @FocusState private var isDescriptionFocused: Bool
     
     var body: some View {
         NavigationStack {
             ZStack {
                 Form {
+                    // Phase 4.3 - Description with suggestions
                     Section("Task Details") {
-                        TextField("Description", text: $description, axis: .vertical)
-                            .lineLimit(3...6)
-                            .focused($isDescriptionFocused)
+                        VStack(alignment: .leading, spacing: 0) {
+                            TextField("Description", text: $description, axis: .vertical)
+                                .lineLimit(3...6)
+                                .focused($isDescriptionFocused)
+                                .onChange(of: description) { oldValue, newValue in
+                                    updateSuggestions(for: newValue)
+                                }
+                            
+                            // Suggestions dropdown RIGHT BELOW the text field
+                            if showSuggestions && !filteredSuggestions.isEmpty {
+                                suggestionsDropdown
+                                    .padding(.top, 8)
+                            }
+                        }
                     }
                     
-                    Section("Time") {
+                    Section("Date & Time") {
                         DatePicker(
-                            "Start Time",
+                            "Start",
                             selection: $startTime,
                             displayedComponents: [.date, .hourAndMinute]
                         )
                         
                         DatePicker(
-                            "End Time",
+                            "End",
                             selection: $endTime,
                             displayedComponents: [.date, .hourAndMinute]
                         )
@@ -76,6 +93,67 @@ struct AddTaskView: View {
                 isDescriptionFocused = true
             }
         }
+    }
+    
+    // MARK: - Phase 4.3 - Suggestions Dropdown
+    
+    private var suggestionsDropdown: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                ForEach(filteredSuggestions.prefix(5), id: \.self) { suggestion in
+                    Button(action: {
+                        selectSuggestion(suggestion)
+                    }) {
+                        HStack {
+                            Text(suggestion)
+                                .foregroundColor(.primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            
+                            Image(systemName: "arrow.up.left")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
+                    
+                    if suggestion != filteredSuggestions.prefix(5).last {
+                        Divider()
+                    }
+                }
+            }
+        }
+        .frame(maxHeight: 200)
+        .background(Color(.systemBackground))
+    }
+    
+    // MARK: - Phase 4.3 - Suggestion Logic
+    
+    private func updateSuggestions(for text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Only show suggestions if user typed something
+        guard !trimmed.isEmpty else {
+            showSuggestions = false
+            filteredSuggestions = []
+            return
+        }
+        
+        // Filter suggestions that START with the input text (case insensitive)
+        // and are not exactly the same as current text
+        filteredSuggestions = suggestions.filter { suggestion in
+            suggestion.lowercased().hasPrefix(trimmed.lowercased()) &&
+            suggestion.lowercased() != trimmed.lowercased()
+        }
+        
+        showSuggestions = !filteredSuggestions.isEmpty
+    }
+    
+    private func selectSuggestion(_ suggestion: String) {
+        description = suggestion
+        showSuggestions = false
+        filteredSuggestions = []
+        isDescriptionFocused = false // Dismiss keyboard
     }
     
     // MARK: - Actions
@@ -119,6 +197,15 @@ struct AddTaskView: View {
 
 // MARK: - Preview
 #Preview {
-    AddTaskView(onTaskAdded: {})
-        .environmentObject(AuthenticationService.shared)
+    AddTaskView(
+        onTaskAdded: {},
+        suggestions: [
+            "Morning workout",
+            "Team meeting",
+            "Code review",
+            "Grocery shopping",
+            "Coffee break"
+        ]
+    )
+    .environmentObject(AuthenticationService.shared)
 }

@@ -36,6 +36,11 @@ struct TaskListView: View {
     // Phase 4.4 - Task Counter / Page Indicator
     @State private var currentVisibleIndex: Int = 0
     
+    // Phase 4.3 - Task Suggestions
+    private var taskSuggestions: [String] {
+        Array(Set(allTasks.map { $0.description })).sorted()
+    }
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -82,14 +87,21 @@ struct TaskListView: View {
                 }
             }
             .sheet(isPresented: $showAddTask) {
-                AddTaskView(onTaskAdded: {
-                    loadTasks()
-                })
+                AddTaskView(
+                    onTaskAdded: {
+                        loadTasks()
+                    },
+                    suggestions: taskSuggestions // Phase 4.3 - Pass suggestions
+                )
             }
             .sheet(item: $taskToEdit) { task in
-                EditTaskView(task: task, onTaskUpdated: {
-                    loadTasks()
-                })
+                EditTaskView(
+                    task: task,
+                    onTaskUpdated: {
+                        loadTasks()
+                    },
+                    suggestions: taskSuggestions
+                )
             }
             .alert(item: $alertItem) { alertItem in
                 alertItem.alert
@@ -110,9 +122,10 @@ struct TaskListView: View {
             }
             .onAppear {
                 if let preview = previewTasks {
-                    tasks = preview  // Use preview data
+                    tasks = preview
+                    allTasks = preview
                 } else {
-                    loadTasks()      // Normal behavior
+                    loadTasks()
                 }
             }
         }
@@ -193,7 +206,7 @@ struct TaskListView: View {
                     Circle()
                         .fill(Color.red)
                         .frame(width: 8, height: 8)
-                        .offset(x: 4, y: -4)
+                        .offset(x: 4, y: 0)
                 }
             }
         }
