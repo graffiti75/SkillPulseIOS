@@ -2,8 +2,7 @@
 //  TaskListView.swift
 //  SkillPulse
 //
-//  Phase 3 - Real Task List View with Firestore Integration
-//  Replaces Phase 1.5 placeholder
+//  Phase 4.1 - Added Date Filtering Feature
 //
 
 import SwiftUI
@@ -13,6 +12,7 @@ struct TaskListView: View {
     @StateObject private var firestoreService = FirestoreService.shared
     
     @State private var tasks: [SkillTask] = []
+    @State private var allTasks: [SkillTask] = [] // Store all tasks for filtering
     @State private var isLoading: Bool = false
     @State private var alertItem: AlertItem?
     @State private var showAddTask: Bool = false
@@ -20,13 +20,26 @@ struct TaskListView: View {
     @State private var taskToDelete: SkillTask?
     @State private var showDeleteConfirmation: Bool = false
     
+    // Phase 4.1 - Date Filtering
+    @State private var showFilterOptions: Bool = false
+    @State private var selectedFilterDate: Date? = nil
+    @State private var isFilterActive: Bool = false
+    
     var body: some View {
         NavigationStack {
             ZStack {
-                if tasks.isEmpty && !isLoading {
-                    emptyStateView
-                } else {
-                    taskListContent
+                VStack(spacing: 0) {
+                    // Filter bar (Phase 4.1)
+                    if showFilterOptions {
+                        filterBar
+                    }
+                    
+                    // Task list or empty state
+                    if tasks.isEmpty && !isLoading {
+                        emptyStateView.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        taskListContent
+                    }
                 }
                 
                 if isLoading {
@@ -41,7 +54,10 @@ struct TaskListView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    addButton
+                    HStack(spacing: 12) {
+                        filterButton
+                        addButton
+                    }
                 }
             }
             .sheet(isPresented: $showAddTask) {
@@ -79,6 +95,85 @@ struct TaskListView: View {
     
     // MARK: - View Components
     
+    // Phase 4.1 - Filter Bar (Fixed UI)
+    private var filterBar: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 12) {
+                // Date Picker (compact style)
+                DatePicker(
+                    "",
+                    selection: Binding(
+                        get: { selectedFilterDate ?? Date() },
+                        set: { selectedFilterDate = $0 }
+                    ),
+                    displayedComponents: [.date]
+                )
+                .datePickerStyle(.compact)
+                .labelsHidden()
+                
+                Spacer()
+                
+                // Apply Filter Button
+                Button(action: applyFilter) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass")
+                        Text("Search")
+                    }
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.blue)
+                    .cornerRadius(8)
+                }
+            }
+            
+            // Clear Filter Button (if filter is active)
+            if isFilterActive {
+                Button(action: clearFilter) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "xmark.circle.fill")
+                        Text("Clear Filter")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.red)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color(.systemGray6))
+        .transition(.move(edge: .top).combined(with: .opacity))
+    }
+    
+    // Phase 4.1 - Filter Button
+    private var filterButton: some View {
+        Button(action: {
+            withAnimation {
+                showFilterOptions.toggle()
+                if !showFilterOptions {
+                    clearFilter()
+                }
+            }
+        }) {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: showFilterOptions ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                    .font(.title2)
+                    .foregroundColor(showFilterOptions ? .blue : .primary)
+                
+                // Badge when filter is active
+                if isFilterActive {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                        .offset(x: 4, y: 0)
+                }
+            }
+        }
+    }
+    
     private var emptyStateView: some View {
         VStack(spacing: 20) {
             Image(systemName: "list.bullet.clipboard")
@@ -86,11 +181,11 @@ struct TaskListView: View {
                 .frame(width: 80, height: 80)
                 .foregroundColor(.gray)
             
-            Text("No Tasks Yet")
+            Text(isFilterActive ? "No Tasks Found" : "No Tasks Yet")
                 .font(.title2)
                 .fontWeight(.semibold)
             
-            Text("Tap + to create your first task")
+            Text(isFilterActive ? "Try a different date" : "Tap + to create your first task")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
         }
@@ -151,6 +246,35 @@ struct TaskListView: View {
         }
     }
     
+    // MARK: - Phase 4.1 - Filter Methods
+    
+    private func applyFilter() {
+        guard let filterDate = selectedFilterDate else { return }
+        
+        isFilterActive = true
+        
+        // Format the date to match ISO 8601 format (YYYY-MM-DD)
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let dateString = dateFormatter.string(from: filterDate)
+        
+        // Filter tasks that contain this date in their startTime
+        tasks = allTasks.filter { task in
+            task.startTime.contains(dateString)
+        }
+        
+        print("📅 Filtered by date: \(dateString), found \(tasks.count) tasks")
+    }
+    
+    private func clearFilter() {
+        withAnimation {
+            isFilterActive = false
+            selectedFilterDate = nil
+            tasks = allTasks
+        }
+        print("🔄 Filter cleared, showing all \(tasks.count) tasks")
+    }
+    
     // MARK: - Helper Methods
     
     private func getUsernameFromEmail() -> String {
@@ -176,7 +300,15 @@ struct TaskListView: View {
                 )
                 
                 await MainActor.run {
-                    self.tasks = loadedTasks
+                    self.allTasks = loadedTasks
+                    
+                    // Apply filter if active, otherwise show all
+                    if isFilterActive {
+                        applyFilter()
+                    } else {
+                        self.tasks = loadedTasks
+                    }
+                    
                     self.isLoading = false
                 }
             } catch {
@@ -194,7 +326,8 @@ struct TaskListView: View {
                 try await firestoreService.deleteTask(taskId: task.id)
                 
                 await MainActor.run {
-                    // Remove from local array
+                    // Remove from both arrays
+                    allTasks.removeAll { $0.id == task.id }
                     tasks.removeAll { $0.id == task.id }
                     alertItem = AlertItem.success("Task deleted successfully")
                 }

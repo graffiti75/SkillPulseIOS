@@ -23,7 +23,7 @@ class FirestoreService: ObservableObject {
     private let itemsLimit = 50
     
     /// Published array of tasks
-    @Published var tasks: [Task] = []
+    @Published var tasks: [SkillTask] = []
     
     /// Loading state
     @Published var isLoading: Bool = false
@@ -42,7 +42,7 @@ class FirestoreService: ObservableObject {
     /// Load tasks for the current user
     /// - Parameter userEmail: Current user's email
     /// - Returns: Array of tasks or error
-    func loadTasks(for userEmail: String) async throws -> [Task] {
+    func loadTasks(for userEmail: String) async throws -> [SkillTask] {
         isLoading = true
         errorMessage = nil
         
@@ -53,10 +53,10 @@ class FirestoreService: ObservableObject {
                 .limit(to: itemsLimit)
                 .getDocuments()
             
-            var loadedTasks: [Task] = []
+            var loadedTasks: [SkillTask] = []
             
             for document in snapshot.documents {
-                if let task = Task(document: document) {
+                if let task = SkillTask(document: document) {
                     loadedTasks.append(task)
                 }
             }
